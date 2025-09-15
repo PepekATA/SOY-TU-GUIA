@@ -1,12 +1,12 @@
 soytuguia/
-│── main.py              # Código principal (FastAPI o Streamlit)
-│── requirements.txt      # Dependencias para Render
+│── main.py                  # Código principal FastAPI
+│── requirements.txt         # Dependencias
 │── modules/
-│    ├── finage_client.py # Cliente para llamar API de Finage
-│    ├── predictor.py     # Lógica para interpretar señales (subir/bajar, tiempo, confianza)
-│    ├── chart.py         # Funciones para generar gráficas
-│    ├── formatter.py     # Convierte predicción técnica en texto entendible
+│    ├── finage_client.py    # Cliente API de Finage
+│    ├── predictor.py        # Interpreta señales en texto entendible
+│    ├── chart.py            # Genera gráficas dinámicas
+│    ├── formatter.py        # Formatea texto y predicción para usuario
 │── templates/
-│    └── index.html       # Frontend simple para mostrar predicciones y gráfico
+│    └── index.html          # Frontend con selector de pares y gráficos
 │── static/
-│    └── style.css        # Estilos de la web
+│    └── style.css           # Estilos de la web
