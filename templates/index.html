@@ -3,6 +3,7 @@
 <head>
     <title>Soy Tu Guía - Trading AI</title>
     <meta charset="utf-8">
+    <script src="https://cdn.plot.ly/plotly-latest.min.js"></script>
     <style>
         * { margin: 0; padding: 0; box-sizing: border-box; }
         
@@ -10,13 +11,13 @@
             font-family: 'Arial', sans-serif;
             background: linear-gradient(135deg, #0a0a0a, #1a1a2e, #16213e);
             color: white;
-            height: 100vh;
-            overflow: hidden;
+            min-height: 100vh;
+            overflow-x: hidden;
         }
         
         .container {
             display: flex;
-            height: 100vh;
+            min-height: 100vh;
         }
         
         .sidebar {
@@ -25,6 +26,8 @@
             padding: 20px;
             overflow-y: auto;
             border-right: 2px solid cyan;
+            position: fixed;
+            height: 100vh;
         }
         
         .sidebar h2 {
@@ -59,63 +62,14 @@
         }
         
         .main-content {
+            margin-left: 250px;
             flex: 1;
             padding: 20px;
             overflow-y: auto;
-            position: relative;
-        }
-        
-        .header {
-            display: flex;
-            justify-content: space-between;
-            align-items: center;
-            padding: 15px;
-            background: rgba(0,0,0,0.7);
-            border-radius: 10px;
-            margin-bottom: 20px;
-        }
-        
-        .live-price {
-            font-size: 32px;
-            font-weight: bold;
-            color: #00ff00;
-            text-shadow: 0 0 10px #00ff00;
-        }
-        
-        .chart-container {
-            background: rgba(0,0,0,0.6);
-            border-radius: 10px;
-            padding: 20px;
-            min-height: 600px;
-            position: relative;
-        }
-        
-        .loading {
-            position: absolute;
-            top: 50%;
-            left: 50%;
-            transform: translate(-50%, -50%);
-            font-size: 24px;
-            color: cyan;
-        }
-        
-        .spinner {
-            border: 3px solid rgba(255,255,255,0.1);
-            border-top: 3px solid cyan;
-            border-radius: 50%;
-            width: 50px;
-            height: 50px;
-            animation: spin 1s linear infinite;
-            margin: 20px auto;
-        }
-        
-        @keyframes spin {
-            0% { transform: rotate(0deg); }
-            100% { transform: rotate(360deg); }
         }
         
         .status {
-            position: absolute;
+            position: fixed;
             top: 20px;
             right: 20px;
             padding: 10px 20px;
@@ -123,11 +77,76 @@
             border: 1px solid #00ff00;
             border-radius: 20px;
             animation: pulse 2s infinite;
+            z-index: 1000;
         }
         
         @keyframes pulse {
             0%, 100% { opacity: 1; }
             50% { opacity: 0.5; }
+        }
+        
+        .pair-section {
+            background: rgba(0,0,0,0.6);
+            border-radius: 10px;
+            padding: 20px;
+            margin-bottom: 20px;
+            border: 1px solid rgba(0,255,255,0.3);
+        }
+        
+        .pair-header {
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            margin-bottom: 20px;
+            padding: 15px;
+            background: rgba(0,0,0,0.7);
+            border-radius: 10px;
+        }
+        
+        .pair-title {
+            font-size: 24px;
+            color: cyan;
+        }
+        
+        .live-price {
+            font-size: 28px;
+            font-weight: bold;
+            color: #00ff00;
+            text-shadow: 0 0 10px #00ff00;
+        }
+        
+        .chart-area {
+            min-height: 400px;
+            background: rgba(0,0,0,0.5);
+            border-radius: 10px;
+            padding: 10px;
+        }
+        
+        .loading {
+            text-align: center;
+            padding: 50px;
+            color: cyan;
+        }
+        
+        .selected-info {
+            background: rgba(0,255,255,0.1);
+            padding: 10px;
+            margin-bottom: 20px;
+            border-radius: 5px;
+            border: 1px solid cyan;
+        }
+        
+        .close-btn {
+            background: #ff3333;
+            color: white;
+            border: none;
+            padding: 5px 15px;
+            border-radius: 5px;
+            cursor: pointer;
+        }
+        
+        .close-btn:hover {
+            background: #ff5555;
         }
     </style>
 </head>
@@ -135,8 +154,11 @@
     <div class="container">
         <div class="sidebar">
             <h2>📊 PARES DE DIVISAS</h2>
+            <div class="selected-info">
+                Seleccionados: <span id="selected-count">0</span>
+            </div>
             {% for pair in forex_pairs %}
-            <button class="pair-btn" onclick="loadPair('{{ pair }}')">
+            <button class="pair-btn" onclick="togglePair('{{ pair }}')">
                 {{ pair }}
             </button>
             {% endfor %}
@@ -144,80 +166,117 @@
         
         <div class="main-content">
             <div class="status">🔴 EN VIVO</div>
-            
-            <div class="header">
-                <div>
-                    <h1 id="current-pair">Selecciona un par</h1>
-                    <div id="timestamp"></div>
-                </div>
-                <div class="live-price" id="live-price">--.----</div>
-            </div>
-            
-            <div class="chart-container" id="chart-container">
-                <div class="loading">
-                    <div class="spinner"></div>
-                    <p>Esperando selección...</p>
-                </div>
-            </div>
+            <div id="pairs-container"></div>
         </div>
     </div>
     
     <script>
-        let currentPair = null;
-        let refreshInterval = null;
+        let selectedPairs = new Set();
+        let refreshIntervals = {};
         
-        async function loadPair(symbol) {
-            currentPair = symbol;
+        function togglePair(symbol) {
+            const btn = event.target;
             
-            // Actualizar UI
-            document.getElementById('current-pair').textContent = symbol;
-            document.getElementById('chart-container').innerHTML = '<div class="loading"><div class="spinner"></div><p>Cargando datos en vivo...</p></div>';
-            
-            // Marcar botón activo
-            document.querySelectorAll('.pair-btn').forEach(btn => {
+            if (selectedPairs.has(symbol)) {
+                // Deseleccionar
+                selectedPairs.delete(symbol);
                 btn.classList.remove('active');
-                if(btn.textContent.trim() === symbol) {
-                    btn.classList.add('active');
-                }
-            });
+                removePairSection(symbol);
+            } else {
+                // Seleccionar
+                selectedPairs.add(symbol);
+                btn.classList.add('active');
+                addPairSection(symbol);
+            }
             
-            // Cargar datos
-            await updateData();
-            
-            // Auto-refresh cada 5 segundos
-            if(refreshInterval) clearInterval(refreshInterval);
-            refreshInterval = setInterval(updateData, 5000);
+            document.getElementById('selected-count').textContent = selectedPairs.size;
         }
         
-        async function updateData() {
-            if(!currentPair) return;
+        function addPairSection(symbol) {
+            const container = document.getElementById('pairs-container');
             
+            const section = document.createElement('div');
+            section.className = 'pair-section';
+            section.id = `section-${symbol}`;
+            section.innerHTML = `
+                <div class="pair-header">
+                    <div>
+                        <div class="pair-title">${symbol}</div>
+                        <div id="timestamp-${symbol}">Cargando...</div>
+                    </div>
+                    <div class="live-price" id="price-${symbol}">--.----</div>
+                    <button class="close-btn" onclick="togglePair('${symbol}')">✕</button>
+                </div>
+                <div class="chart-area" id="chart-${symbol}">
+                    <div class="loading">Cargando datos...</div>
+                </div>
+            `;
+            
+            container.appendChild(section);
+            
+            // Cargar datos inmediatamente
+            updatePairData(symbol);
+            
+            // Auto-refresh cada 5 segundos
+            refreshIntervals[symbol] = setInterval(() => updatePairData(symbol), 5000);
+        }
+        
+        function removePairSection(symbol) {
+            const section = document.getElementById(`section-${symbol}`);
+            if (section) {
+                section.remove();
+            }
+            
+            if (refreshIntervals[symbol]) {
+                clearInterval(refreshIntervals[symbol]);
+                delete refreshIntervals[symbol];
+            }
+        }
+        
+        async function updatePairData(symbol) {
             try {
-                // Obtener datos en vivo
-                const liveResponse = await fetch(`/api/live/${currentPair}`);
+                // Obtener datos
+                const liveResponse = await fetch(`/api/live/${symbol}`);
                 const liveData = await liveResponse.json();
                 
                 // Actualizar precio
-                document.getElementById('live-price').textContent = liveData.current_price.toFixed(5);
+                const priceElement = document.getElementById(`price-${symbol}`);
+                if (priceElement && liveData.current_price) {
+                    priceElement.textContent = liveData.current_price.toFixed(5);
+                }
                 
                 // Actualizar timestamp
-                document.getElementById('timestamp').textContent = `Actualizado: ${new Date().toLocaleTimeString()}`;
+                const timestampElement = document.getElementById(`timestamp-${symbol}`);
+                if (timestampElement) {
+                    timestampElement.textContent = `Actualizado: ${new Date().toLocaleTimeString()}`;
+                }
                 
-                // Obtener gráfico
-                const chartResponse = await fetch(`/api/chart/${currentPair}`);
+                // Obtener y mostrar gráfico
+                const chartResponse = await fetch(`/api/chart/${symbol}`);
                 const chartData = await chartResponse.json();
                 
-                // Mostrar gráfico
-                document.getElementById('chart-container').innerHTML = chartData.chart;
+                const chartElement = document.getElementById(`chart-${symbol}`);
+                if (chartElement && chartData.chart) {
+                    chartElement.innerHTML = chartData.chart;
+                }
                 
             } catch(error) {
-                console.error('Error:', error);
+                console.error(`Error actualizando ${symbol}:`, error);
+                const chartElement = document.getElementById(`chart-${symbol}`);
+                if (chartElement) {
+                    chartElement.innerHTML = '<div class="loading">Error cargando datos. Reintentando...</div>';
+                }
             }
         }
         
         // Cargar EURUSD por defecto
         window.onload = () => {
-            loadPair('EURUSD');
+            setTimeout(() => {
+                const firstBtn = document.querySelector('.pair-btn');
+                if (firstBtn) {
+                    firstBtn.click();
+                }
+            }, 100);
         };
     </script>
 </body>
