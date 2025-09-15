@@ -2,10 +2,20 @@ import os
 import requests
 
 API_KEY = os.getenv("FINAGE_API_KEY")
-BASE_URL = "https://api.finage.co.uk/forex/signal"
+BASE_URL = "https://api.finage.co.uk"
 
 def get_forex_signal(symbol: str):
-    """Obtiene la señal de predicción de un par de divisas"""
-    url = f"{BASE_URL}?symbol={symbol}&apikey={API_KEY}"
-    response = requests.get(url)
+    url = f"{BASE_URL}/last/forex/{symbol}"
+    params = {"apikey": API_KEY}
+    response = requests.get(url, params=params)
     return response.json()
+
+def get_multiple_signals(symbols: list):
+    data = []
+    for symbol in symbols:
+        try:
+            signal = get_forex_signal(symbol)
+            data.append(signal)
+        except:
+            continue
+    return data
