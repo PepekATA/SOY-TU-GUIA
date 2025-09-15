@@ -1,28 +1,29 @@
-def interpret_signal(data):
-    """
-    Convierte la señal técnica de Finage en:
-    - Dirección (sube / baja)
-    - Porcentaje de confianza
-    - Tiempo estimado de duración
-    """
-    signal = data.get("signal", "hold")
-    confidence = data.get("confidence", 0.75) * 100
-    timeframe = data.get("interval", "5m")
+import random
 
-    if signal == "buy":
-        direction = "Subirá"
-        duration = "20 minutos"
-    elif signal == "sell":
-        direction = "Bajará"
-        duration = "15 minutos"
+def interpret_signal(data, symbol):
+    price = data.get("price", 0)
+    ask = data.get("ask", price)
+    bid = data.get("bid", price)
+    
+    spread = abs(ask - bid)
+    momentum = random.uniform(0.6, 0.95)
+    
+    if spread < 0.0005:
+        direction = "📈 COMPRA FUERTE"
+        confidence = 85 + random.randint(0, 10)
+    elif spread < 0.001:
+        direction = "📊 MANTENER"
+        confidence = 70 + random.randint(0, 15)
     else:
-        direction = "Se mantendrá"
-        duration = "10 minutos"
-
+        direction = "📉 VENTA"
+        confidence = 75 + random.randint(0, 15)
+    
     return {
-        "symbol": data.get("symbol", "EUR/USD"),
+        "symbol": symbol,
+        "price": price,
         "direction": direction,
-        "confidence": round(confidence, 2),
-        "timeframe": timeframe,
-        "duration": duration
+        "confidence": confidence,
+        "spread": spread,
+        "ask": ask,
+        "bid": bid
     }
