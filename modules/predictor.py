@@ -1,12 +1,12 @@
 def interpret_signal(data):
     """
-    Convierte la señal técnica de Finage en algo entendible:
+    Convierte la señal técnica de Finage en:
     - Dirección (sube / baja)
     - Porcentaje de confianza
-    - Tiempo estimado
+    - Tiempo estimado de duración
     """
-    signal = data.get("signal")
-    confidence = data.get("confidence", 0.75) * 100  # %
+    signal = data.get("signal", "hold")
+    confidence = data.get("confidence", 0.75) * 100
     timeframe = data.get("interval", "5m")
 
     if signal == "buy":
