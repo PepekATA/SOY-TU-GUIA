@@ -2,7 +2,8 @@ from fastapi import FastAPI, Request
 from fastapi.responses import HTMLResponse, JSONResponse
 from fastapi.templating import Jinja2Templates
 from fastapi.middleware.cors import CORSMiddleware
-from modules.finage_client import get_forex_signal, get_multiple_signals
+from fastapi.staticfiles import StaticFiles
+from modules.finage_client import get_forex_signal
 from modules.predictor import interpret_signal
 from modules.chart import generate_chart
 
@@ -27,7 +28,7 @@ async def home(request: Request):
     for symbol in FOREX_PAIRS[:10]:
         try:
             raw = get_forex_signal(symbol)
-            pred = interpret_signal(raw, symbol)
+            pred = interpret_signal(raw, symbol)  # FIXED: Added symbol parameter
             predictions.append(pred)
         except:
             continue
@@ -52,3 +53,32 @@ async def get_chart():
     
     chart_html = generate_chart(predictions)
     return JSONResponse({"chart": chart_html})
+
+@app.get("/embed")
+async def embed_chart():
+    predictions = []
+    for symbol in FOREX_PAIRS[:10]:
+        try:
+            raw = get_forex_signal(symbol)
+            pred = interpret_signal(raw, symbol)
+            predictions.append(pred)
+        except:
+            continue
+    
+    chart_html = generate_chart(predictions)
+    
+    html = f"""
+    <!DOCTYPE html>
+    <html>
+    <head>
+        <script src="https://cdn.plot.ly/plotly-latest.min.js"></script>
+        <style>
+            body {{ margin: 0; padding: 0; background: transparent; }}
+        </style>
+    </head>
+    <body>
+        {chart_html}
+    </body>
+    </html>
+    """
+    return HTMLResponse(content=html)
