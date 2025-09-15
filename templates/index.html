@@ -1,0 +1,16 @@
+<!DOCTYPE html>
+<html>
+<head>
+    <title>Soy tu guía - Predicciones AI</title>
+    <link rel="stylesheet" href="/static/style.css">
+</head>
+<body>
+    <h1>Soy tu guía</h1>
+    <h2>{{ prediction.symbol }} → {{ prediction.direction }}</h2>
+    <p>Confianza: {{ prediction.confidence }}%</p>
+    <p>Horizonte: {{ prediction.timeframe }}</p>
+    <p>Duración estimada: {{ prediction.duration }}</p>
+
+    <div>{{ chart|safe }}</div>
+</body>
+</html>
