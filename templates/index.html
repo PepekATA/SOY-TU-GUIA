@@ -1,37 +1,224 @@
 <!DOCTYPE html>
 <html>
 <head>
-    <title>Soy Tu Guía - AI Forex</title>
+    <title>Soy Tu Guía - Trading AI</title>
+    <meta charset="utf-8">
     <style>
+        * { margin: 0; padding: 0; box-sizing: border-box; }
+        
         body {
-            margin: 0;
-            padding: 0;
-            background: linear-gradient(135deg, #0f0c29, #302b63, #24243e);
             font-family: 'Arial', sans-serif;
-            overflow-x: hidden;
+            background: linear-gradient(135deg, #0a0a0a, #1a1a2e, #16213e);
+            color: white;
+            height: 100vh;
+            overflow: hidden;
         }
+        
         .container {
-            width: 100%;
-            min-height: 100vh;
             display: flex;
-            justify-content: center;
-            align-items: center;
+            height: 100vh;
         }
-        .chart-container {
-            width: 95%;
-            max-width: 1400px;
-            background: rgba(0,0,0,0.5);
-            border-radius: 20px;
+        
+        .sidebar {
+            width: 250px;
+            background: rgba(0,0,0,0.8);
             padding: 20px;
-            box-shadow: 0 0 50px rgba(0,255,255,0.3);
+            overflow-y: auto;
+            border-right: 2px solid cyan;
+        }
+        
+        .sidebar h2 {
+            color: cyan;
+            margin-bottom: 20px;
+            text-align: center;
+            font-size: 18px;
+        }
+        
+        .pair-btn {
+            width: 100%;
+            padding: 12px;
+            margin: 5px 0;
+            background: linear-gradient(90deg, #1e3c72, #2a5298);
+            border: 1px solid cyan;
+            color: white;
+            cursor: pointer;
+            border-radius: 5px;
+            font-size: 14px;
+            transition: all 0.3s;
+        }
+        
+        .pair-btn:hover {
+            background: linear-gradient(90deg, #2a5298, #1e3c72);
+            transform: translateX(5px);
+            box-shadow: 0 0 15px cyan;
+        }
+        
+        .pair-btn.active {
+            background: linear-gradient(90deg, #00ff00, #00aa00);
+            box-shadow: 0 0 20px #00ff00;
+        }
+        
+        .main-content {
+            flex: 1;
+            padding: 20px;
+            overflow-y: auto;
+            position: relative;
+        }
+        
+        .header {
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            padding: 15px;
+            background: rgba(0,0,0,0.7);
+            border-radius: 10px;
+            margin-bottom: 20px;
+        }
+        
+        .live-price {
+            font-size: 32px;
+            font-weight: bold;
+            color: #00ff00;
+            text-shadow: 0 0 10px #00ff00;
+        }
+        
+        .chart-container {
+            background: rgba(0,0,0,0.6);
+            border-radius: 10px;
+            padding: 20px;
+            min-height: 600px;
+            position: relative;
+        }
+        
+        .loading {
+            position: absolute;
+            top: 50%;
+            left: 50%;
+            transform: translate(-50%, -50%);
+            font-size: 24px;
+            color: cyan;
+        }
+        
+        .spinner {
+            border: 3px solid rgba(255,255,255,0.1);
+            border-top: 3px solid cyan;
+            border-radius: 50%;
+            width: 50px;
+            height: 50px;
+            animation: spin 1s linear infinite;
+            margin: 20px auto;
+        }
+        
+        @keyframes spin {
+            0% { transform: rotate(0deg); }
+            100% { transform: rotate(360deg); }
+        }
+        
+        .status {
+            position: absolute;
+            top: 20px;
+            right: 20px;
+            padding: 10px 20px;
+            background: rgba(0,255,0,0.2);
+            border: 1px solid #00ff00;
+            border-radius: 20px;
+            animation: pulse 2s infinite;
+        }
+        
+        @keyframes pulse {
+            0%, 100% { opacity: 1; }
+            50% { opacity: 0.5; }
         }
     </style>
 </head>
 <body>
     <div class="container">
-        <div class="chart-container">
-            {{ chart|safe }}
+        <div class="sidebar">
+            <h2>📊 PARES DE DIVISAS</h2>
+            {% for pair in forex_pairs %}
+            <button class="pair-btn" onclick="loadPair('{{ pair }}')">
+                {{ pair }}
+            </button>
+            {% endfor %}
+        </div>
+        
+        <div class="main-content">
+            <div class="status">🔴 EN VIVO</div>
+            
+            <div class="header">
+                <div>
+                    <h1 id="current-pair">Selecciona un par</h1>
+                    <div id="timestamp"></div>
+                </div>
+                <div class="live-price" id="live-price">--.----</div>
+            </div>
+            
+            <div class="chart-container" id="chart-container">
+                <div class="loading">
+                    <div class="spinner"></div>
+                    <p>Esperando selección...</p>
+                </div>
+            </div>
         </div>
     </div>
+    
+    <script>
+        let currentPair = null;
+        let refreshInterval = null;
+        
+        async function loadPair(symbol) {
+            currentPair = symbol;
+            
+            // Actualizar UI
+            document.getElementById('current-pair').textContent = symbol;
+            document.getElementById('chart-container').innerHTML = '<div class="loading"><div class="spinner"></div><p>Cargando datos en vivo...</p></div>';
+            
+            // Marcar botón activo
+            document.querySelectorAll('.pair-btn').forEach(btn => {
+                btn.classList.remove('active');
+                if(btn.textContent.trim() === symbol) {
+                    btn.classList.add('active');
+                }
+            });
+            
+            // Cargar datos
+            await updateData();
+            
+            // Auto-refresh cada 5 segundos
+            if(refreshInterval) clearInterval(refreshInterval);
+            refreshInterval = setInterval(updateData, 5000);
+        }
+        
+        async function updateData() {
+            if(!currentPair) return;
+            
+            try {
+                // Obtener datos en vivo
+                const liveResponse = await fetch(`/api/live/${currentPair}`);
+                const liveData = await liveResponse.json();
+                
+                // Actualizar precio
+                document.getElementById('live-price').textContent = liveData.current_price.toFixed(5);
+                
+                // Actualizar timestamp
+                document.getElementById('timestamp').textContent = `Actualizado: ${new Date().toLocaleTimeString()}`;
+                
+                // Obtener gráfico
+                const chartResponse = await fetch(`/api/chart/${currentPair}`);
+                const chartData = await chartResponse.json();
+                
+                // Mostrar gráfico
+                document.getElementById('chart-container').innerHTML = chartData.chart;
+                
+            } catch(error) {
+                console.error('Error:', error);
+            }
+        }
+        
+        // Cargar EURUSD por defecto
+        window.onload = () => {
+            loadPair('EURUSD');
+        };
+    </script>
 </body>
 </html>
