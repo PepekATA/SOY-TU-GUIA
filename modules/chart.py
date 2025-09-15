@@ -1,68 +1,107 @@
 import plotly.graph_objects as go
 from plotly.subplots import make_subplots
-import random
 from datetime import datetime, timedelta
 
 def generate_live_chart(symbol, history, prediction):
-    # Simular datos si no hay historia
-    if not history or len(history) < 50:
-        history = []
-        base_price = prediction["price"]
-        for i in range(100):
-            history.append({
-                "c": base_price + random.uniform(-0.005, 0.005),
-                "h": base_price + random.uniform(0, 0.008),
-                "l": base_price - random.uniform(0, 0.008),
-                "o": base_price + random.uniform(-0.003, 0.003),
-                "v": random.randint(1000, 100000),
-                "t": (datetime.now() - timedelta(minutes=100-i)).timestamp() * 1000
-            })
-    
-    # Crear subplots
+    # Crear figura con subplots
     fig = make_subplots(
-        rows=3, cols=2,
-        row_heights=[0.5, 0.25, 0.25],
+        rows=2, cols=2,
+        row_heights=[0.7, 0.3],
         column_widths=[0.7, 0.3],
         specs=[
-            [{"type": "candlestick", "rowspan": 1, "colspan": 1}, {"type": "indicator"}],
-            [{"type": "bar", "colspan": 1}, {"type": "indicator"}],
-            [{"type": "scatter", "colspan": 2}, None]
+            [{"type": "candlestick"}, {"type": "indicator"}],
+            [{"type": "bar"}, {"type": "table"}]
         ],
         subplot_titles=(
-            f"📊 {symbol} - Precio en Vivo",
-            "🎯 Predicción Principal",
+            f"📊 {symbol} - Gráfico en Tiempo Real",
+            "🎯 Predicción AI",
             "📈 Volumen",
-            "📍 Indicadores Técnicos",
-            "⏰ Predicciones Múltiples"
+            "📋 Detalles"
         )
     )
     
-    # Gráfico de velas
-    times = [datetime.fromtimestamp(h.get("t", 0)/1000) for h in history]
+    # Preparar datos
+    if history and len(history) > 0:
+        times = [datetime.fromtimestamp(h.get("t", 0)/1000) for h in history]
+        
+        # Gráfico de velas
+        fig.add_trace(
+            go.Candlestick(
+                x=times,
+                open=[h.get("o", 0) for h in history],
+                high=[h.get("h", 0) for h in history],
+                low=[h.get("l", 0) for h in history],
+                close=[h.get("c", 0) for h in history],
+                name=symbol,
+                increasing_line_color='#00ff00',
+                decreasing_line_color='#ff0000'
+            ),
+            row=1, col=1
+        )
+        
+        # Añadir líneas de entrada, target y stop loss
+        last_time = times[-1]
+        future_times = [last_time + timedelta(minutes=i*5) for i in range(1, 13)]
+        
+        # Línea de precio actual
+        fig.add_trace(
+            go.Scatter(
+                x=[times[-1], future_times[-1]],
+                y=[prediction["price"], prediction["price"]],
+                mode='lines',
+                name='Precio Actual',
+                line=dict(color='yellow', width=2, dash='dash')
+            ),
+            row=1, col=1
+        )
+        
+        # Línea de target
+        fig.add_trace(
+            go.Scatter(
+                x=[times[-1], future_times[-1]],
+                y=[prediction["price"], prediction["target_price"]],
+                mode='lines+markers',
+                name='Target',
+                line=dict(color='#00ff00', width=3),
+                marker=dict(size=10, symbol='star')
+            ),
+            row=1, col=1
+        )
+        
+        # Línea de stop loss
+        fig.add_trace(
+            go.Scatter(
+                x=[times[-1], future_times[-1]],
+                y=[prediction["price"], prediction["stop_loss"]],
+                mode='lines+markers',
+                name='Stop Loss',
+                line=dict(color='#ff0000', width=2, dash='dot'),
+                marker=dict(size=8, symbol='x')
+            ),
+            row=1, col=1
+        )
+        
+        # Volumen
+        fig.add_trace(
+            go.Bar(
+                x=times,
+                y=[h.get("v", 0) for h in history],
+                name='Volumen',
+                marker_color='cyan',
+                opacity=0.5
+            ),
+            row=2, col=1
+        )
     
-    fig.add_trace(
-        go.Candlestick(
-            x=times,
-            open=[h.get("o", 0) for h in history],
-            high=[h.get("h", 0) for h in history],
-            low=[h.get("l", 0) for h in history],
-            close=[h.get("c", 0) for h in history],
-            name=symbol,
-            increasing_line_color='#00ff00',
-            decreasing_line_color='#ff0000'
-        ),
-        row=1, col=1
-    )
-    
-    # Indicador principal
+    # Indicador de predicción
     color = "#00ff00" if "SUBIRÁ" in prediction["main_direction"] else "#ff0000" if "BAJARÁ" in prediction["main_direction"] else "#ffff00"
     
     fig.add_trace(
         go.Indicator(
             mode="gauge+number+delta",
             value=prediction["main_confidence"],
-            title={'text': f"<b>{prediction['main_direction']}</b><br>{prediction['main_duration']}<br><i>{prediction['after_action']}</i>"},
-            delta={'reference': 75},
+            title={'text': f"<b>{prediction['main_direction']}</b><br>Duración: {prediction['main_duration']}"},
+            delta={'reference': 75, 'position': "bottom"},
             gauge={
                 'axis': {'range': [0, 100]},
                 'bar': {'color': color},
@@ -81,86 +120,59 @@ def generate_live_chart(symbol, history, prediction):
         row=1, col=2
     )
     
-    # Volumen
-    fig.add_trace(
-        go.Bar(
-            x=times,
-            y=[h.get("v", 0) for h in history],
-            name='Volumen',
-            marker_color='cyan',
-            opacity=0.5
-        ),
-        row=2, col=1
-    )
+    # Tabla de detalles
+    reasons_text = "<br>".join(prediction.get("reasons", ["Análisis en proceso"]))
     
-    # Indicadores técnicos
     fig.add_trace(
-        go.Indicator(
-            mode="number",
-            value=prediction["rsi"],
-            title={'text': f"RSI: {prediction['rsi']:.1f}<br>MACD: {prediction['macd']:.4f}<br>Bollinger: {prediction['bollinger']}"},
-            number={'font': {'size': 20}},
-            domain={'x': [0.7, 1], 'y': [0.25, 0.5]}
+        go.Table(
+            header=dict(
+                values=['Parámetro', 'Valor'],
+                fill_color='darkblue',
+                align='left',
+                font=dict(color='white', size=12)
+            ),
+            cells=dict(
+                values=[
+                    ['Precio Entrada', 'Target', 'Stop Loss', 'Spread', 'Razones'],
+                    [
+                        f'{prediction["entry_price"]:.5f}',
+                        f'{prediction["target_price"]:.5f}',
+                        f'{prediction["stop_loss"]:.5f}',
+                        f'{prediction["spread"]:.5f}',
+                        reasons_text
+                    ]
+                ],
+                fill_color='rgba(0,0,0,0.5)',
+                align='left',
+                font=dict(color='white', size=11),
+                height=30
+            )
         ),
         row=2, col=2
-    )
-    
-    # Predicciones secundarias
-    pred_times = []
-    pred_values = []
-    pred_labels = []
-    
-    current_price = prediction["price"]
-    for pred in prediction["secondary_predictions"]:
-        pred_times.append(pred["timeframe"])
-        change = float(pred["change"].replace("+", "").replace("-", ""))
-        if "-" in pred["change"]:
-            change = -change
-        pred_values.append(current_price + change)
-        pred_labels.append(f"{pred['direction']} ({pred['confidence']}%)")
-    
-    fig.add_trace(
-        go.Scatter(
-            x=pred_times,
-            y=pred_values,
-            mode='lines+markers+text',
-            name='Predicciones',
-            line=dict(color='yellow', width=2),
-            marker=dict(size=12, color='orange'),
-            text=pred_labels,
-            textposition="top center"
-        ),
-        row=3, col=1
     )
     
     # Layout
     fig.update_layout(
         template="plotly_dark",
-        height=900,
-        showlegend=False,
+        height=800,
+        showlegend=True,
         title={
-            'text': f"<b>🎯 SOY TU GUÍA - {symbol} EN VIVO</b>",
+            'text': f"<b>🤖 PREDICCIÓN AI - {symbol}</b>",
             'x': 0.5,
             'xanchor': 'center',
-            'font': {'size': 28, 'color': 'white'}
+            'font': {'size': 24, 'color': 'white'}
         },
         paper_bgcolor='rgba(0,0,0,0.95)',
         plot_bgcolor='rgba(0,0,0,0.9)',
         font=dict(color='white', size=11),
         xaxis_rangeslider_visible=False,
-        updatemenus=[{
-            'type': 'buttons',
-            'showactive': False,
-            'x': 0.98,
-            'y': 0.98,
-            'xanchor': 'right',
-            'yanchor': 'top',
-            'buttons': [{
-                'label': '🔄 Auto-refresh ON',
-                'method': 'relayout',
-                'args': [{'title': f"<b>🎯 SOY TU GUÍA - {symbol} EN VIVO 🔄</b>"}]
-            }]
-        }]
+        legend=dict(
+            orientation="h",
+            yanchor="bottom",
+            y=1.02,
+            xanchor="right",
+            x=1
+        )
     )
     
     return fig.to_html(full_html=False, include_plotlyjs='cdn', config={'responsive': True})
