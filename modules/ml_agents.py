@@ -5,9 +5,10 @@ from datetime import datetime, timedelta
 import random
 
 class ForexAgent:
-    def __init__(self, symbol):
+    def __init__(self, symbol, timeframe="H1"):
         self.symbol = symbol
-        self.model_path = f"models/{symbol}_model.json"
+        self.timeframe = timeframe
+        self.model_path = f"models/{symbol}_{timeframe}.json"
         self.history = []
         self.patterns = self.load_or_create_model()
         
@@ -19,7 +20,6 @@ class ForexAgent:
         return self.create_base_patterns()
     
     def create_base_patterns(self):
-        # Patrones técnicos básicos
         return {
             "trend": random.choice(["bullish", "bearish", "neutral"]),
             "volatility": random.uniform(0.001, 0.01),
@@ -34,12 +34,10 @@ class ForexAgent:
         if len(history) < 10:
             return self.patterns
         
-        # Análisis simple de tendencia
         prices = [h.get("c", current_price) for h in history[-20:]]
         avg_10 = np.mean(prices[-10:])
         avg_20 = np.mean(prices)
         
-        # Actualizar patrones
         self.patterns["momentum"] = (avg_10 - avg_20) / avg_20 * 100
         self.patterns["rsi"] = self.calculate_rsi(prices)
         self.patterns["volatility"] = np.std(prices)
@@ -71,8 +69,9 @@ class ForexAgent:
     def predict(self, current_price, history):
         patterns = self.analyze_price_action(current_price, history)
         
-        # Lógica de predicción
         prediction = {
+            "symbol": self.symbol,
+            "timeframe": self.timeframe,
             "direction": "NEUTRAL",
             "confidence": 50,
             "entry_price": current_price,
@@ -82,11 +81,9 @@ class ForexAgent:
             "reason": []
         }
         
-        # Análisis múltiple
         bull_signals = 0
         bear_signals = 0
         
-        # Señal de tendencia
         if patterns["trend"] == "bullish":
             bull_signals += 2
             prediction["reason"].append("Tendencia alcista")
@@ -94,7 +91,6 @@ class ForexAgent:
             bear_signals += 2
             prediction["reason"].append("Tendencia bajista")
         
-        # Señal RSI
         if patterns["rsi"] < 30:
             bull_signals += 3
             prediction["reason"].append("RSI sobreventa")
@@ -102,7 +98,6 @@ class ForexAgent:
             bear_signals += 3
             prediction["reason"].append("RSI sobrecompra")
         
-        # Señal momentum
         if patterns["momentum"] > 0.5:
             bull_signals += 2
             prediction["reason"].append("Momentum positivo")
@@ -110,7 +105,6 @@ class ForexAgent:
             bear_signals += 2
             prediction["reason"].append("Momentum negativo")
         
-        # Determinar predicción final
         total_signals = bull_signals + bear_signals
         if total_signals > 0:
             if bull_signals > bear_signals:
@@ -119,28 +113,12 @@ class ForexAgent:
                 change_percent = random.uniform(0.1, 0.5) * (patterns["volatility"] * 100)
                 prediction["target_price"] = current_price * (1 + change_percent/100)
                 prediction["stop_loss"] = current_price * 0.998
-                
-                # Duración basada en fuerza de señal
-                if bull_signals > 5:
-                    prediction["duration"] = random.choice(["20 minutos", "30 minutos", "1 hora"])
-                elif bull_signals > 3:
-                    prediction["duration"] = random.choice(["10 minutos", "15 minutos", "20 minutos"])
-                else:
-                    prediction["duration"] = random.choice(["5 minutos", "10 minutos"])
-                    
             elif bear_signals > bull_signals:
                 prediction["direction"] = "📉 BAJARÁ"
                 prediction["confidence"] = min(95, 50 + (bear_signals * 10))
                 change_percent = random.uniform(0.1, 0.5) * (patterns["volatility"] * 100)
                 prediction["target_price"] = current_price * (1 - change_percent/100)
                 prediction["stop_loss"] = current_price * 1.002
-                
-                if bear_signals > 5:
-                    prediction["duration"] = random.choice(["20 minutos", "30 minutos", "1 hora"])
-                elif bear_signals > 3:
-                    prediction["duration"] = random.choice(["10 minutos", "15 minutos", "20 minutos"])
-                else:
-                    prediction["duration"] = random.choice(["5 minutos", "10 minutos"])
         else:
             prediction["direction"] = "📊 LATERAL"
             prediction["confidence"] = 60
@@ -153,15 +131,17 @@ class ForexAgent:
         with open(self.model_path, 'w') as f:
             json.dump(self.patterns, f)
 
+
 class ForexPredictor:
     def __init__(self):
         self.agents = {}
         
-    def get_agent(self, symbol):
-        if symbol not in self.agents:
-            self.agents[symbol] = ForexAgent(symbol)
-        return self.agents[symbol]
+    def get_agent(self, symbol, timeframe="H1"):
+        key = f"{symbol}_{timeframe}"
+        if key not in self.agents:
+            self.agents[key] = ForexAgent(symbol, timeframe)
+        return self.agents[key]
     
-    def predict(self, symbol, current_price, history):
-        agent = self.get_agent(symbol)
+    def predict(self, symbol, current_price, history, timeframe="H1"):
+        agent = self.get_agent(symbol, timeframe)
         return agent.predict(current_price, history)
