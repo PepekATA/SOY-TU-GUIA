@@ -1,0 +1,40 @@
+/* static/style.css */
+:root {
+    --primary-color: #00d4ff;
+    --success-color: #00ff00;
+    --danger-color: #ff4444;
+    --warning-color: #ffaa00;
+    --bg-dark: #0f0f0f;
+    --bg-medium: #1a1a2e;
+    --bg-light: #16213e;
+}
+
+.alert {
+    padding: 15px;
+    margin: 10px 0;
+    border-radius: 8px;
+    animation: fadeIn 0.5s;
+}
+
+.alert-success {
+    background: rgba(0,255,0,0.1);
+    border: 1px solid var(--success-color);
+    color: var(--success-color);
+}
+
+.alert-danger {
+    background: rgba(255,0,0,0.1);
+    border: 1px solid var(--danger-color);
+    color: var(--danger-color);
+}
+
+.alert-warning {
+    background: rgba(255,170,0,0.1);
+    border: 1px solid var(--warning-color);
+    color: var(--warning-color);
+}
+
+@keyframes fadeIn {
+    from { opacity: 0; transform: translateY(-10px); }
+    to { opacity: 1; transform: translateY(0); }
+}
