@@ -1,96 +1,181 @@
 <!DOCTYPE html>
-<html>
+<html lang="es">
 <head>
-    <title>Soy Tu Guía - Trading AI</title>
+    <title>🤖 SOY TU GUÍA - Predictor Forex AI</title>
     <meta charset="utf-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1">
     <script src="https://cdn.plot.ly/plotly-latest.min.js"></script>
     <style>
         * { margin: 0; padding: 0; box-sizing: border-box; }
         
         body {
-            font-family: 'Arial', sans-serif;
-            background: linear-gradient(135deg, #0a0a0a, #1a1a2e, #16213e);
+            font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;
+            background: linear-gradient(135deg, #0f0f0f, #1a1a2e, #16213e);
             color: white;
             min-height: 100vh;
-            overflow-x: hidden;
+        }
+        
+        .header {
+            background: linear-gradient(90deg, #00d4ff, #0099ff);
+            padding: 20px;
+            text-align: center;
+            box-shadow: 0 4px 20px rgba(0,212,255,0.5);
+        }
+        
+        .header h1 {
+            font-size: 32px;
+            text-shadow: 2px 2px 10px rgba(0,0,0,0.5);
         }
         
         .container {
             display: flex;
-            min-height: 100vh;
+            min-height: calc(100vh - 80px);
         }
         
         .sidebar {
-            width: 250px;
-            background: rgba(0,0,0,0.8);
+            width: 300px;
+            background: rgba(0,0,0,0.9);
             padding: 20px;
             overflow-y: auto;
-            border-right: 2px solid cyan;
-            position: fixed;
-            height: 100vh;
+            border-right: 2px solid #00d4ff;
         }
         
-        .sidebar h2 {
-            color: cyan;
-            margin-bottom: 20px;
-            text-align: center;
-            font-size: 18px;
+        .control-section {
+            margin-bottom: 30px;
+            padding: 15px;
+            background: rgba(255,255,255,0.05);
+            border-radius: 10px;
+            border: 1px solid rgba(0,212,255,0.3);
         }
         
-        .pair-btn {
-            width: 100%;
-            padding: 12px;
-            margin: 5px 0;
-            background: linear-gradient(90deg, #1e3c72, #2a5298);
-            border: 1px solid cyan;
+        .control-section h3 {
+            color: #00d4ff;
+            margin-bottom: 15px;
+            font-size: 16px;
+        }
+        
+        .timeframe-grid {
+            display: grid;
+            grid-template-columns: repeat(3, 1fr);
+            gap: 5px;
+            margin-bottom: 15px;
+        }
+        
+        .timeframe-btn {
+            padding: 8px;
+            background: rgba(0,100,200,0.3);
+            border: 1px solid #00d4ff;
             color: white;
             cursor: pointer;
             border-radius: 5px;
-            font-size: 14px;
+            font-size: 12px;
             transition: all 0.3s;
         }
         
+        .timeframe-btn:hover {
+            background: rgba(0,212,255,0.5);
+            box-shadow: 0 0 10px #00d4ff;
+        }
+        
+        .timeframe-btn.active {
+            background: #00d4ff;
+            color: black;
+            font-weight: bold;
+        }
+        
+        .pair-grid {
+            display: grid;
+            grid-template-columns: repeat(2, 1fr);
+            gap: 8px;
+            max-height: 400px;
+            overflow-y: auto;
+        }
+        
+        .pair-btn {
+            padding: 10px;
+            background: linear-gradient(135deg, #1e3c72, #2a5298);
+            border: 1px solid #4a90e2;
+            color: white;
+            cursor: pointer;
+            border-radius: 8px;
+            font-size: 13px;
+            font-weight: bold;
+            transition: all 0.3s;
+            position: relative;
+            overflow: hidden;
+        }
+        
+        .pair-btn::before {
+            content: '';
+            position: absolute;
+            top: 50%;
+            left: 50%;
+            width: 0;
+            height: 0;
+            background: radial-gradient(circle, #00ff00, transparent);
+            transition: width 0.3s, height 0.3s;
+            transform: translate(-50%, -50%);
+        }
+        
         .pair-btn:hover {
-            background: linear-gradient(90deg, #2a5298, #1e3c72);
-            transform: translateX(5px);
-            box-shadow: 0 0 15px cyan;
+            transform: translateY(-2px);
+            box-shadow: 0 5px 20px rgba(74,144,226,0.5);
         }
         
         .pair-btn.active {
-            background: linear-gradient(90deg, #00ff00, #00aa00);
-            box-shadow: 0 0 20px #00ff00;
+            background: linear-gradient(135deg, #00ff00, #00aa00);
+            border-color: #00ff00;
+            box-shadow: 0 0 20px rgba(0,255,0,0.5);
         }
         
         .main-content {
-            margin-left: 250px;
             flex: 1;
             padding: 20px;
             overflow-y: auto;
         }
         
-        .status {
-            position: fixed;
-            top: 20px;
-            right: 20px;
-            padding: 10px 20px;
-            background: rgba(0,255,0,0.2);
-            border: 1px solid #00ff00;
-            border-radius: 20px;
+        .status-bar {
+            background: rgba(0,0,0,0.8);
+            padding: 15px;
+            margin-bottom: 20px;
+            border-radius: 10px;
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            border: 1px solid #00d4ff;
+        }
+        
+        .live-indicator {
+            display: flex;
+            align-items: center;
+            gap: 10px;
+        }
+        
+        .live-dot {
+            width: 12px;
+            height: 12px;
+            background: #00ff00;
+            border-radius: 50%;
             animation: pulse 2s infinite;
-            z-index: 1000;
         }
         
         @keyframes pulse {
-            0%, 100% { opacity: 1; }
+            0%, 100% { opacity: 1; box-shadow: 0 0 10px #00ff00; }
             50% { opacity: 0.5; }
         }
         
-        .pair-section {
-            background: rgba(0,0,0,0.6);
-            border-radius: 10px;
+        .pair-card {
+            background: rgba(0,0,0,0.7);
+            border-radius: 15px;
             padding: 20px;
             margin-bottom: 20px;
-            border: 1px solid rgba(0,255,255,0.3);
+            border: 2px solid rgba(0,212,255,0.3);
+            animation: slideIn 0.5s;
+        }
+        
+        @keyframes slideIn {
+            from { opacity: 0; transform: translateY(20px); }
+            to { opacity: 1; transform: translateY(0); }
         }
         
         .pair-header {
@@ -98,186 +183,454 @@
             justify-content: space-between;
             align-items: center;
             margin-bottom: 20px;
-            padding: 15px;
-            background: rgba(0,0,0,0.7);
-            border-radius: 10px;
         }
         
-        .pair-title {
-            font-size: 24px;
-            color: cyan;
+        .pair-info {
+            display: flex;
+            align-items: center;
+            gap: 20px;
+        }
+        
+        .pair-name {
+            font-size: 28px;
+            font-weight: bold;
+            color: #00d4ff;
+            text-shadow: 0 0 10px rgba(0,212,255,0.5);
         }
         
         .live-price {
-            font-size: 28px;
+            font-size: 32px;
             font-weight: bold;
             color: #00ff00;
-            text-shadow: 0 0 10px #00ff00;
+            text-shadow: 0 0 15px rgba(0,255,0,0.5);
         }
         
-        .chart-area {
-            min-height: 400px;
+        .prediction-box {
+            background: rgba(0,50,100,0.3);
+            border: 1px solid #00d4ff;
+            border-radius: 10px;
+            padding: 15px;
+            margin: 15px 0;
+            display: grid;
+            grid-template-columns: repeat(auto-fit, minmax(150px, 1fr));
+            gap: 15px;
+        }
+        
+        .prediction-item {
+            text-align: center;
+            padding: 10px;
+            background: rgba(0,0,0,0.5);
+            border-radius: 8px;
+        }
+        
+        .prediction-label {
+            color: #888;
+            font-size: 12px;
+            margin-bottom: 5px;
+        }
+        
+        .prediction-value {
+            font-size: 18px;
+            font-weight: bold;
+        }
+        
+        .trend-up { color: #00ff00; }
+        .trend-down { color: #ff4444; }
+        .trend-neutral { color: #ffaa00; }
+        
+        .chart-container {
             background: rgba(0,0,0,0.5);
             border-radius: 10px;
             padding: 10px;
+            min-height: 400px;
+        }
+        
+        .close-btn {
+            background: linear-gradient(135deg, #ff4444, #cc0000);
+            color: white;
+            border: none;
+            padding: 8px 16px;
+            border-radius: 5px;
+            cursor: pointer;
+            font-weight: bold;
+            transition: all 0.3s;
+        }
+        
+        .close-btn:hover {
+            background: linear-gradient(135deg, #ff6666, #ff0000);
+            box-shadow: 0 0 15px rgba(255,0,0,0.5);
         }
         
         .loading {
             text-align: center;
             padding: 50px;
-            color: cyan;
+            color: #00d4ff;
+            font-size: 18px;
         }
         
-        .selected-info {
-            background: rgba(0,255,255,0.1);
-            padding: 10px;
-            margin-bottom: 20px;
+        .spinner {
+            border: 4px solid rgba(0,212,255,0.3);
+            border-top: 4px solid #00d4ff;
+            border-radius: 50%;
+            width: 50px;
+            height: 50px;
+            animation: spin 1s linear infinite;
+            margin: 20px auto;
+        }
+        
+        @keyframes spin {
+            0% { transform: rotate(0deg); }
+            100% { transform: rotate(360deg); }
+        }
+        
+        ::-webkit-scrollbar {
+            width: 10px;
+        }
+        
+        ::-webkit-scrollbar-track {
+            background: rgba(0,0,0,0.5);
+        }
+        
+        ::-webkit-scrollbar-thumb {
+            background: linear-gradient(180deg, #00d4ff, #0099ff);
             border-radius: 5px;
-            border: 1px solid cyan;
-        }
-        
-        .close-btn {
-            background: #ff3333;
-            color: white;
-            border: none;
-            padding: 5px 15px;
-            border-radius: 5px;
-            cursor: pointer;
-        }
-        
-        .close-btn:hover {
-            background: #ff5555;
         }
     </style>
 </head>
 <body>
+    <div class="header">
+        <h1>🤖 SOY TU GUÍA - Predictor Forex AI</h1>
+    </div>
+    
     <div class="container">
         <div class="sidebar">
-            <h2>📊 PARES DE DIVISAS</h2>
-            <div class="selected-info">
-                Seleccionados: <span id="selected-count">0</span>
+            <div class="control-section">
+                <h3>⏱️ TIMEFRAMES</h3>
+                <div class="timeframe-grid">
+                    {% for label, value in timeframes.items() %}
+                    <button class="timeframe-btn" onclick="selectTimeframe('{{ label }}')">
+                        {{ label }}
+                    </button>
+                    {% endfor %}
+                </div>
+                <div style="color: #888; font-size: 12px; margin-top: 10px;">
+                    Seleccionado: <span id="selected-timeframe" style="color: #00d4ff;">1m</span>
+                </div>
             </div>
-            {% for pair in forex_pairs %}
-            <button class="pair-btn" onclick="togglePair('{{ pair }}')">
-                {{ pair }}
-            </button>
-            {% endfor %}
+            
+            <div class="control-section">
+                <h3>💱 PARES DE DIVISAS</h3>
+                <div style="margin-bottom: 10px;">
+                    <button onclick="selectAllPairs()" style="width: 48%; padding: 8px; background: #00d4ff; color: black; border: none; border-radius: 5px; cursor: pointer;">
+                        Todos
+                    </button>
+                    <button onclick="clearAllPairs()" style="width: 48%; padding: 8px; background: #ff4444; color: white; border: none; border-radius: 5px; cursor: pointer; margin-left: 4%;">
+                        Limpiar
+                    </button>
+                </div>
+                <div class="pair-grid">
+                    {% for pair in forex_pairs %}
+                    <button class="pair-btn" id="btn-{{ pair }}" onclick="togglePair('{{ pair }}')">
+                        {{ pair }}
+                    </button>
+                    {% endfor %}
+                </div>
+                <div style="color: #888; font-size: 12px; margin-top: 10px;">
+                    Activos: <span id="active-count" style="color: #00ff00;">0</span>/{{ forex_pairs|length }}
+                </div>
+            </div>
         </div>
         
         <div class="main-content">
-            <div class="status">🔴 EN VIVO</div>
-            <div id="pairs-container"></div>
+            <div class="status-bar">
+                <div class="live-indicator">
+                    <div class="live-dot"></div>
+                    <span>EN VIVO - Actualización cada 5s</span>
+                </div>
+                <div id="last-update">
+                    Última actualización: --:--:--
+                </div>
+            </div>
+            
+            <div id="pairs-container">
+                <div class="loading">
+                    <div class="spinner"></div>
+                    <p>Selecciona pares de divisas para comenzar</p>
+                </div>
+            </div>
         </div>
     </div>
     
     <script>
         let selectedPairs = new Set();
-        let refreshIntervals = {};
+        let selectedTimeframe = '1m';
+        let updateIntervals = {};
         
-        function togglePair(symbol) {
-            const btn = event.target;
-            
-            if (selectedPairs.has(symbol)) {
-                // Deseleccionar
-                selectedPairs.delete(symbol);
+        function selectTimeframe(tf) {
+            selectedTimeframe = tf;
+            document.querySelectorAll('.timeframe-btn').forEach(btn => {
                 btn.classList.remove('active');
-                removePairSection(symbol);
-            } else {
-                // Seleccionar
-                selectedPairs.add(symbol);
-                btn.classList.add('active');
-                addPairSection(symbol);
-            }
+            });
+            event.target.classList.add('active');
+            document.getElementById('selected-timeframe').textContent = tf;
             
-            document.getElementById('selected-count').textContent = selectedPairs.size;
+            // Actualizar todos los pares activos
+            selectedPairs.forEach(pair => {
+                updatePairData(pair);
+            });
         }
         
-        function addPairSection(symbol) {
+        function togglePair(symbol) {
+            const btn = document.getElementById(`btn-${symbol}`);
+            
+            if (selectedPairs.has(symbol)) {
+                selectedPairs.delete(symbol);
+                btn.classList.remove('active');
+                removePairCard(symbol);
+            } else {
+                selectedPairs.add(symbol);
+                btn.classList.add('active');
+                addPairCard(symbol);
+            }
+            
+            document.getElementById('active-count').textContent = selectedPairs.size;
+            
+            if (selectedPairs.size === 0) {
+                document.getElementById('pairs-container').innerHTML = `
+                    <div class="loading">
+                        <div class="spinner"></div>
+                        <p>Selecciona pares de divisas para comenzar</p>
+                    </div>
+                `;
+            }
+        }
+        function selectAllPairs() {
+            document.querySelectorAll('.pair-btn').forEach(btn => {
+                const pair = btn.id.replace('btn-', '');
+                if (!selectedPairs.has(pair)) {
+                    selectedPairs.add(pair);
+                    btn.classList.add('active');
+                    addPairCard(pair);
+                }
+            });
+            document.getElementById('active-count').textContent = selectedPairs.size;
+        }
+        
+        function clearAllPairs() {
+            selectedPairs.forEach(pair => {
+                document.getElementById(`btn-${pair}`).classList.remove('active');
+                removePairCard(pair);
+            });
+            selectedPairs.clear();
+            document.getElementById('active-count').textContent = 0;
+            document.getElementById('pairs-container').innerHTML = `
+                <div class="loading">
+                    <div class="spinner"></div>
+                    <p>Selecciona pares de divisas para comenzar</p>
+                </div>
+            `;
+        }
+        
+        function addPairCard(symbol) {
             const container = document.getElementById('pairs-container');
             
-            const section = document.createElement('div');
-            section.className = 'pair-section';
-            section.id = `section-${symbol}`;
-            section.innerHTML = `
+            if (container.querySelector('.loading')) {
+                container.innerHTML = '';
+            }
+            
+            const card = document.createElement('div');
+            card.className = 'pair-card';
+            card.id = `card-${symbol}`;
+            card.innerHTML = `
                 <div class="pair-header">
-                    <div>
-                        <div class="pair-title">${symbol}</div>
-                        <div id="timestamp-${symbol}">Cargando...</div>
+                    <div class="pair-info">
+                        <div class="pair-name">${symbol}</div>
+                        <div class="live-price" id="price-${symbol}">-.-----</div>
                     </div>
-                    <div class="live-price" id="price-${symbol}">--.----</div>
-                    <button class="close-btn" onclick="togglePair('${symbol}')">✕</button>
+                    <button class="close-btn" onclick="togglePair('${symbol}')">✕ Cerrar</button>
                 </div>
-                <div class="chart-area" id="chart-${symbol}">
-                    <div class="loading">Cargando datos...</div>
+                
+                <div class="prediction-box" id="prediction-${symbol}">
+                    <div class="prediction-item">
+                        <div class="prediction-label">DIRECCIÓN</div>
+                        <div class="prediction-value" id="direction-${symbol}">Analizando...</div>
+                    </div>
+                    <div class="prediction-item">
+                        <div class="prediction-label">TENDENCIA</div>
+                        <div class="prediction-value" id="trend-${symbol}">Calculando...</div>
+                    </div>
+                    <div class="prediction-item">
+                        <div class="prediction-label">CONFIANZA</div>
+                        <div class="prediction-value" id="confidence-${symbol}">0%</div>
+                    </div>
+                    <div class="prediction-item">
+                        <div class="prediction-label">TARGET</div>
+                        <div class="prediction-value trend-up" id="target-${symbol}">-.-----</div>
+                    </div>
+                    <div class="prediction-item">
+                        <div class="prediction-label">STOP LOSS</div>
+                        <div class="prediction-value trend-down" id="stop-${symbol}">-.-----</div>
+                    </div>
+                    <div class="prediction-item">
+                        <div class="prediction-label">ACCIÓN</div>
+                        <div class="prediction-value" id="action-${symbol}">ESPERAR</div>
+                    </div>
+                </div>
+                
+                <div class="chart-container" id="chart-${symbol}">
+                    <div class="loading">
+                        <div class="spinner"></div>
+                        <p>Cargando gráfico...</p>
+                    </div>
                 </div>
             `;
             
-            container.appendChild(section);
+            container.appendChild(card);
             
             // Cargar datos inmediatamente
             updatePairData(symbol);
             
-            // Auto-refresh cada 5 segundos
-            refreshIntervals[symbol] = setInterval(() => updatePairData(symbol), 5000);
+            // Actualizar cada 5 segundos
+            updateIntervals[symbol] = setInterval(() => updatePairData(symbol), 5000);
         }
         
-        function removePairSection(symbol) {
-            const section = document.getElementById(`section-${symbol}`);
-            if (section) {
-                section.remove();
+        function removePairCard(symbol) {
+            const card = document.getElementById(`card-${symbol}`);
+            if (card) {
+                card.style.animation = 'slideOut 0.5s';
+                setTimeout(() => card.remove(), 500);
             }
             
-            if (refreshIntervals[symbol]) {
-                clearInterval(refreshIntervals[symbol]);
-                delete refreshIntervals[symbol];
+            if (updateIntervals[symbol]) {
+                clearInterval(updateIntervals[symbol]);
+                delete updateIntervals[symbol];
             }
         }
         
         async function updatePairData(symbol) {
             try {
-                // Obtener datos
-                const liveResponse = await fetch(`/api/live/${symbol}`);
-                const liveData = await liveResponse.json();
+                // Obtener predicción con timeframe seleccionado
+                const response = await fetch(`/api/predict/${symbol}/${selectedTimeframe}`);
+                const data = await response.json();
                 
                 // Actualizar precio
-                const priceElement = document.getElementById(`price-${symbol}`);
-                if (priceElement && liveData.current_price) {
-                    priceElement.textContent = liveData.current_price.toFixed(5);
+                const priceEl = document.getElementById(`price-${symbol}`);
+                if (priceEl && data.current_price) {
+                    priceEl.textContent = data.current_price.toFixed(5);
+                    
+                    // Animación de cambio de precio
+                    priceEl.style.animation = 'none';
+                    setTimeout(() => {
+                        priceEl.style.animation = 'pulse 0.5s';
+                    }, 10);
+                }
+                
+                // Actualizar dirección
+                const directionEl = document.getElementById(`direction-${symbol}`);
+                if (directionEl) {
+                    directionEl.textContent = data.direction || 'ANALIZANDO...';
+                    directionEl.className = 'prediction-value';
+                    
+                    if (data.direction?.includes('COMPRAR')) {
+                        directionEl.classList.add('trend-up');
+                    } else if (data.direction?.includes('VENDER')) {
+                        directionEl.classList.add('trend-down');
+                    } else {
+                        directionEl.classList.add('trend-neutral');
+                    }
+                }
+                
+                // Actualizar tendencia
+                const trendEl = document.getElementById(`trend-${symbol}`);
+                if (trendEl) {
+                    trendEl.textContent = data.trend || 'Calculando...';
+                    trendEl.className = 'prediction-value';
+                    
+                    if (data.trend?.includes('SUBIDA')) {
+                        trendEl.classList.add('trend-up');
+                    } else if (data.trend?.includes('BAJADA')) {
+                        trendEl.classList.add('trend-down');
+                    } else {
+                        trendEl.classList.add('trend-neutral');
+                    }
+                }
+                
+                // Actualizar confianza
+                const confidenceEl = document.getElementById(`confidence-${symbol}`);
+                if (confidenceEl) {
+                    const confidence = data.confidence || 0;
+                    confidenceEl.textContent = `${confidence.toFixed(1)}%`;
+                    
+                    if (confidence > 70) {
+                        confidenceEl.style.color = '#00ff00';
+                    } else if (confidence > 50) {
+                        confidenceEl.style.color = '#ffaa00';
+                    } else {
+                        confidenceEl.style.color = '#ff4444';
+                    }
+                }
+                
+                // Actualizar target y stop loss
+                if (data.target_price) {
+                    document.getElementById(`target-${symbol}`).textContent = data.target_price.toFixed(5);
+                }
+                if (data.stop_loss) {
+                    document.getElementById(`stop-${symbol}`).textContent = data.stop_loss.toFixed(5);
+                }
+                
+                // Actualizar acción recomendada
+                const actionEl = document.getElementById(`action-${symbol}`);
+                if (actionEl) {
+                    actionEl.textContent = data.action || 'ESPERAR';
+                    actionEl.className = 'prediction-value';
+                    
+                    if (data.action === 'COMPRAR AHORA') {
+                        actionEl.classList.add('trend-up');
+                        actionEl.style.fontWeight = 'bold';
+                    } else if (data.action === 'VENDER AHORA') {
+                        actionEl.classList.add('trend-down');
+                        actionEl.style.fontWeight = 'bold';
+                    }
+                }
+                
+                // Actualizar gráfico
+                const chartResponse = await fetch(`/api/chart/${symbol}?timeframe=${selectedTimeframe}`);
+                const chartData = await chartResponse.json();
+                
+                const chartEl = document.getElementById(`chart-${symbol}`);
+                if (chartEl && chartData.chart) {
+                    chartEl.innerHTML = chartData.chart;
                 }
                 
                 // Actualizar timestamp
-                const timestampElement = document.getElementById(`timestamp-${symbol}`);
-                if (timestampElement) {
-                    timestampElement.textContent = `Actualizado: ${new Date().toLocaleTimeString()}`;
-                }
-                
-                // Obtener y mostrar gráfico
-                const chartResponse = await fetch(`/api/chart/${symbol}`);
-                const chartData = await chartResponse.json();
-                
-                const chartElement = document.getElementById(`chart-${symbol}`);
-                if (chartElement && chartData.chart) {
-                    chartElement.innerHTML = chartData.chart;
-                }
+                document.getElementById('last-update').textContent = 
+                    `Última actualización: ${new Date().toLocaleTimeString()}`;
                 
             } catch(error) {
                 console.error(`Error actualizando ${symbol}:`, error);
-                const chartElement = document.getElementById(`chart-${symbol}`);
-                if (chartElement) {
-                    chartElement.innerHTML = '<div class="loading">Error cargando datos. Reintentando...</div>';
-                }
             }
         }
         
-        // Cargar EURUSD por defecto
+        // Inicializar con timeframe por defecto
         window.onload = () => {
+            // Seleccionar 1m por defecto
+            document.querySelector('.timeframe-btn').click();
+            
+            // Auto-seleccionar EURUSD
             setTimeout(() => {
-                const firstBtn = document.querySelector('.pair-btn');
-                if (firstBtn) {
-                    firstBtn.click();
-                }
-            }, 100);
+                togglePair('EURUSD');
+            }, 500);
         };
+        
+        // Estilo de animación slideOut
+        const style = document.createElement('style');
+        style.textContent = `
+            @keyframes slideOut {
+                from { opacity: 1; transform: translateY(0); }
+                to { opacity: 0; transform: translateY(-20px); }
+            }
+        `;
+        document.head.appendChild(style);
     </script>
 </body>
 </html>
