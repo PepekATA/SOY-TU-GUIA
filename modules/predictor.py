@@ -1,18 +1,20 @@
 from modules.ml_agents import ForexPredictor
+from modules.finage_client import get_forex_history
 
 predictor = ForexPredictor()
 
-def interpret_signal(data, symbol):
-    from modules.finage_client import get_forex_history
-    
+def interpret_signal(data, symbol, timeframe="H1"):
+    """
+    Genera señal de trading para un par de divisa y timeframe específico.
+    """
     price = data.get("price", 0)
-    history = get_forex_history(symbol)
+    history = get_forex_history(symbol, timeframe)  # ajustar tu cliente para timeframe
     
-    # Obtener predicción del agente ML
-    prediction = predictor.predict(symbol, price, history)
-    
+    prediction = predictor.predict(symbol, price, history, timeframe)
+
     return {
         "symbol": symbol,
+        "timeframe": timeframe,
         "price": price,
         "entry_price": prediction["entry_price"],
         "target_price": prediction["target_price"],
