@@ -1,7 +1,6 @@
 import numpy as np
 import json
 import os
-from datetime import datetime, timedelta
 import random
 
 class ForexAgent:
@@ -84,6 +83,7 @@ class ForexAgent:
         bull_signals = 0
         bear_signals = 0
         
+        # Señales básicas
         if patterns["trend"] == "bullish":
             bull_signals += 2
             prediction["reason"].append("Tendencia alcista")
@@ -105,6 +105,7 @@ class ForexAgent:
             bear_signals += 2
             prediction["reason"].append("Momentum negativo")
         
+        # Decisión final
         total_signals = bull_signals + bear_signals
         if total_signals > 0:
             if bull_signals > bear_signals:
@@ -142,6 +143,6 @@ class ForexPredictor:
             self.agents[key] = ForexAgent(symbol, timeframe)
         return self.agents[key]
     
-    def predict(self, symbol, current_price, history, timeframe="H1"):
+    def predict(self, symbol, price, history, timeframe="H1"):
         agent = self.get_agent(symbol, timeframe)
-        return agent.predict(current_price, history)
+        return agent.predict(price, history)
