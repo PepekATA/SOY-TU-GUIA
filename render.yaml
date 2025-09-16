@@ -1,0 +1,13 @@
+services:
+  - type: web
+    name: soytuguia-forex-predictor
+    env: python
+    buildCommand: pip install -r requirements.txt
+    startCommand: uvicorn main:app --host 0.0.0.0 --port $PORT
+    envVars:
+      - key: ALPACA_API_KEY
+        sync: false
+      - key: ALPACA_SECRET_KEY
+        sync: false
+      - key: GOOGLE_CLOUD_PROJECT
+        sync: false
