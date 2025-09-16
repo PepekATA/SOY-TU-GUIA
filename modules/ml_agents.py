@@ -1,148 +1,320 @@
+# modules/ml_agents.py
 import numpy as np
-import json
+import pandas as pd
+from sklearn.preprocessing import StandardScaler
+from sklearn.ensemble import RandomForestRegressor, GradientBoostingRegressor
+from sklearn.neural_network import MLPRegressor
+import xgboost as xgb
+import lightgbm as lgb
 import os
-import random
+import joblib
+import warnings
+warnings.filterwarnings('ignore')
 
-class ForexAgent:
-    def __init__(self, symbol, timeframe="H1"):
-        self.symbol = symbol
+class BaseAgent:
+    """Clase base para todos los agentes"""
+    def __init__(self, name, pair, timeframe):
+        self.name = name
+        self.pair = pair
         self.timeframe = timeframe
-        self.model_path = f"models/{symbol}_{timeframe}.json"
-        self.history = []
-        self.patterns = self.load_or_create_model()
+        self.model = None
+        self.scaler = StandardScaler()
+        self.performance = {"wins": 0, "losses": 0, "accuracy": 0}
+        self.model_path = f"/content/repo/models/{pair}/{name}_{timeframe}.joblib"
         
-    def load_or_create_model(self):
-        os.makedirs("models", exist_ok=True)
-        if os.path.exists(self.model_path):
-            with open(self.model_path, 'r') as f:
-                return json.load(f)
-        return self.create_base_patterns()
-    
-    def create_base_patterns(self):
-        return {
-            "trend": random.choice(["bullish", "bearish", "neutral"]),
-            "volatility": random.uniform(0.001, 0.01),
-            "support": 0,
-            "resistance": 0,
-            "momentum": random.uniform(-1, 1),
-            "rsi": random.uniform(30, 70),
-            "macd": random.uniform(-0.005, 0.005)
-        }
-    
-    def analyze_price_action(self, current_price, history):
-        if len(history) < 10:
-            return self.patterns
+    def prepare_features(self, history):
+        if len(history) < 50:
+            return None
+        df = pd.DataFrame(history)
+        df['returns'] = df['c'].pct_change()
+        df['log_returns'] = np.log(df['c'] / df['c'].shift(1))
+        df['sma_5'] = df['c'].rolling(5).mean()
+        df['sma_10'] = df['c'].rolling(10).mean()
+        df['sma_20'] = df['c'].rolling(20).mean()
+        df['ema_9'] = df['c'].ewm(span=9).mean()
+        df['ema_21'] = df['c'].ewm(span=21).mean()
         
-        prices = [h.get("c", current_price) for h in history[-20:]]
-        avg_10 = np.mean(prices[-10:])
-        avg_20 = np.mean(prices)
+        delta = df['c'].diff()
+        gain = (delta.where(delta > 0, 0)).rolling(14).mean()
+        loss = (-delta.where(delta < 0, 0)).rolling(14).mean()
+        rs = gain / loss
+        df['rsi'] = 100 - (100 / (1 + rs))
         
-        self.patterns["momentum"] = (avg_10 - avg_20) / avg_20 * 100
-        self.patterns["rsi"] = self.calculate_rsi(prices)
-        self.patterns["volatility"] = np.std(prices)
+        df['macd'] = df['c'].ewm(span=12).mean() - df['c'].ewm(span=26).mean()
+        df['macd_signal'] = df['macd'].ewm(span=9).mean()
+        df['macd_diff'] = df['macd'] - df['macd_signal']
         
-        if avg_10 > avg_20:
-            self.patterns["trend"] = "bullish"
-        elif avg_10 < avg_20:
-            self.patterns["trend"] = "bearish"
-        else:
-            self.patterns["trend"] = "neutral"
+        df['bb_middle'] = df['c'].rolling(20).mean()
+        bb_std = df['c'].rolling(20).std()
+        df['bb_upper'] = df['bb_middle'] + (bb_std * 2)
+        df['bb_lower'] = df['bb_middle'] - (bb_std * 2)
+        df['bb_width'] = df['bb_upper'] - df['bb_lower']
+        df['bb_position'] = (df['c'] - df['bb_lower']) / df['bb_width']
+        
+        df['volatility'] = df['returns'].rolling(20).std()
+        df['atr'] = self.calculate_atr(df)
+        
+        if 'v' in df.columns:
+            df['volume_ratio'] = df['v'] / df['v'].rolling(20).mean()
+            df['volume_trend'] = df['v'].rolling(5).mean() / df['v'].rolling(20).mean()
+        
+        df['high_low_ratio'] = df['h'] / df['l']
+        df['close_open_ratio'] = df['c'] / df['o']
+        df['momentum_3'] = df['c'] / df['c'].shift(3) - 1
+        df['momentum_5'] = df['c'] / df['c'].shift(5) - 1
+        df['momentum_10'] = df['c'] / df['c'].shift(10) - 1
+        
+        df = df.dropna()
+        if len(df) == 0:
+            return None
             
-        return self.patterns
+        feature_cols = [
+            'returns', 'log_returns', 'sma_5', 'sma_10', 'sma_20',
+            'ema_9', 'ema_21', 'rsi', 'macd', 'macd_signal', 'macd_diff',
+            'bb_position', 'bb_width', 'volatility', 'atr',
+            'high_low_ratio', 'close_open_ratio',
+            'momentum_3', 'momentum_5', 'momentum_10'
+        ]
+        if 'volume_ratio' in df.columns:
+            feature_cols.extend(['volume_ratio', 'volume_trend'])
+        
+        return df[feature_cols].iloc[-1:].values
     
-    def calculate_rsi(self, prices, period=14):
-        if len(prices) < period:
-            return 50
-        
-        deltas = np.diff(prices)
-        seed = deltas[:period+1]
-        up = seed[seed >= 0].sum() / period
-        down = -seed[seed < 0].sum() / period
-        
-        if down == 0:
-            return 100
-        rs = up / down
-        rsi = 100 - (100 / (1 + rs))
-        return rsi
+    def calculate_atr(self, df, period=14):
+        high_low = df['h'] - df['l']
+        high_close = np.abs(df['h'] - df['c'].shift())
+        low_close = np.abs(df['l'] - df['c'].shift())
+        ranges = pd.concat([high_low, high_close, low_close], axis=1)
+        true_range = np.max(ranges, axis=1)
+        return true_range.rolling(period).mean()
+    
+    def save(self):
+        os.makedirs(os.path.dirname(self.model_path), exist_ok=True)
+        joblib.dump({
+            'model': self.model,
+            'scaler': self.scaler,
+            'performance': self.performance,
+            'name': self.name,
+            'pair': self.pair,
+            'timeframe': self.timeframe
+        }, self.model_path)
+    
+    def load(self):
+        if os.path.exists(self.model_path):
+            data = joblib.load(self.model_path)
+            self.model = data['model']
+            self.scaler = data['scaler']
+            self.performance = data['performance']
+            return True
+        return False
+
+class TrendAgent(BaseAgent):
+    def __init__(self, pair, timeframe):
+        super().__init__("TrendAgent", pair, timeframe)
+        self.model = RandomForestRegressor(n_estimators=100, max_depth=10, random_state=42)
     
     def predict(self, current_price, history):
-        patterns = self.analyze_price_action(current_price, history)
-        
-        prediction = {
-            "symbol": self.symbol,
-            "timeframe": self.timeframe,
-            "direction": "NEUTRAL",
-            "confidence": 50,
-            "entry_price": current_price,
-            "duration": "5 minutos",
-            "target_price": current_price,
-            "stop_loss": current_price,
-            "reason": []
-        }
-        
-        bull_signals = 0
-        bear_signals = 0
-        
-        # Señales básicas
-        if patterns["trend"] == "bullish":
-            bull_signals += 2
-            prediction["reason"].append("Tendencia alcista")
-        elif patterns["trend"] == "bearish":
-            bear_signals += 2
-            prediction["reason"].append("Tendencia bajista")
-        
-        if patterns["rsi"] < 30:
-            bull_signals += 3
-            prediction["reason"].append("RSI sobreventa")
-        elif patterns["rsi"] > 70:
-            bear_signals += 3
-            prediction["reason"].append("RSI sobrecompra")
-        
-        if patterns["momentum"] > 0.5:
-            bull_signals += 2
-            prediction["reason"].append("Momentum positivo")
-        elif patterns["momentum"] < -0.5:
-            bear_signals += 2
-            prediction["reason"].append("Momentum negativo")
-        
-        # Decisión final
-        total_signals = bull_signals + bear_signals
-        if total_signals > 0:
-            if bull_signals > bear_signals:
-                prediction["direction"] = "📈 SUBIRÁ"
-                prediction["confidence"] = min(95, 50 + (bull_signals * 10))
-                change_percent = random.uniform(0.1, 0.5) * (patterns["volatility"] * 100)
-                prediction["target_price"] = current_price * (1 + change_percent/100)
-                prediction["stop_loss"] = current_price * 0.998
-            elif bear_signals > bull_signals:
-                prediction["direction"] = "📉 BAJARÁ"
-                prediction["confidence"] = min(95, 50 + (bear_signals * 10))
-                change_percent = random.uniform(0.1, 0.5) * (patterns["volatility"] * 100)
-                prediction["target_price"] = current_price * (1 - change_percent/100)
-                prediction["stop_loss"] = current_price * 1.002
-        else:
-            prediction["direction"] = "📊 LATERAL"
-            prediction["confidence"] = 60
-            prediction["duration"] = "30 minutos"
-            prediction["reason"].append("Sin señales claras")
-        
-        return prediction
-    
-    def save_model(self):
-        with open(self.model_path, 'w') as f:
-            json.dump(self.patterns, f)
+        features = self.prepare_features(history)
+        if features is None:
+            return {"agent": self.name, "direction": "NEUTRAL", "confidence": 0}
+        try:
+            features_scaled = self.scaler.transform(features)
+            prediction = self.model.predict(features_scaled)[0]
+            if prediction > current_price * 1.001:
+                direction = "BUY"
+                confidence = min(95, abs(prediction - current_price) / current_price * 10000)
+            elif prediction < current_price * 0.999:
+                direction = "SELL"
+                confidence = min(95, abs(current_price - prediction) / current_price * 10000)
+            else:
+                direction = "HOLD"
+                confidence = 50
+            return {
+                "agent": self.name,
+                "direction": direction,
+                "confidence": confidence,
+                "predicted_price": prediction
+            }
+        except Exception:
+            return {"agent": self.name, "direction": "NEUTRAL", "confidence": 0}
 
-
-class ForexPredictor:
-    def __init__(self):
-        self.agents = {}
-        
-    def get_agent(self, symbol, timeframe="H1"):
-        key = f"{symbol}_{timeframe}"
-        if key not in self.agents:
-            self.agents[key] = ForexAgent(symbol, timeframe)
-        return self.agents[key]
+class MomentumAgent(BaseAgent):
+    def __init__(self, pair, timeframe):
+        super().__init__("MomentumAgent", pair, timeframe)
+        self.model = GradientBoostingRegressor(n_estimators=100, learning_rate=0.1, max_depth=5)
     
-    def predict(self, symbol, price, history, timeframe="H1"):
-        agent = self.get_agent(symbol, timeframe)
-        return agent.predict(price, history)
+    def predict(self, current_price, history):
+        features = self.prepare_features(history)
+        if features is None:
+            return {"agent": self.name, "direction": "NEUTRAL", "confidence": 0}
+        try:
+            df = pd.DataFrame(history)
+            momentum = df['c'].pct_change(5).iloc[-1]
+            rsi = self.calculate_rsi(df['c'])
+            features_scaled = self.scaler.transform(features)
+            prediction = self.model.predict(features_scaled)[0]
+            if momentum > 0.002 and rsi < 70:
+                direction = "BUY"
+                confidence = min(90, momentum * 10000)
+            elif momentum < -0.002 and rsi > 30:
+                direction = "SELL"
+                confidence = min(90, abs(momentum) * 10000)
+            else:
+                direction = "HOLD"
+                confidence = 40
+            return {
+                "agent": self.name,
+                "direction": direction,
+                "confidence": confidence,
+                "momentum": momentum,
+                "rsi": rsi
+            }
+        except Exception:
+            return {"agent": self.name, "direction": "NEUTRAL", "confidence": 0}
+    
+    def calculate_rsi(self, prices, period=14):
+        delta = prices.diff()
+        gain = (delta.where(delta > 0, 0)).rolling(period).mean()
+        loss = (-delta.where(delta < 0, 0)).rolling(period).mean()
+        rs = gain / loss
+        return 100 - (100 / (1 + rs)).iloc[-1]
+
+class VolatilityAgent(BaseAgent):
+    def __init__(self, pair, timeframe):
+        super().__init__("VolatilityAgent", pair, timeframe)
+        self.model = xgb.XGBRegressor(n_estimators=100, max_depth=6, learning_rate=0.01)
+    
+    def predict(self, current_price, history):
+        features = self.prepare_features(history)
+        if features is None:
+            return {"agent": self.name, "direction": "NEUTRAL", "confidence": 0}
+        try:
+            df = pd.DataFrame(history)
+            volatility = df['c'].pct_change().std()
+            atr = self.calculate_atr(df).iloc[-1]
+            sma = df['c'].rolling(20).mean().iloc[-1]
+            std = df['c'].rolling(20).std().iloc[-1]
+            upper_band = sma + (2 * std)
+            lower_band = sma - (2 * std)
+            if current_price <= lower_band and volatility < 0.01:
+                direction = "BUY"
+                confidence = 85
+            elif current_price >= upper_band and volatility < 0.01:
+                direction = "SELL"
+                confidence = 85
+            else:
+                direction = "HOLD"
+                confidence = 60
+            return {
+                "agent": self.name,
+                "direction": direction,
+                "confidence": confidence,
+                "volatility": volatility,
+                "atr": atr
+            }
+        except Exception:
+            return {"agent": self.name, "direction": "NEUTRAL", "confidence": 0}
+
+class PatternAgent(BaseAgent):
+    def __init__(self, pair, timeframe):
+        super().__init__("PatternAgent", pair, timeframe)
+        self.model = MLPRegressor(hidden_layer_sizes=(100, 50), max_iter=1000)
+    
+    def detect_patterns(self, df):
+        patterns = []
+        if abs(df['c'].iloc[-1] - df['o'].iloc[-1]) < (df['h'].iloc[-1] - df['l'].iloc[-1]) * 0.1:
+            patterns.append("DOJI")
+        body = abs(df['c'].iloc[-1] - df['o'].iloc[-1])
+        lower_shadow = min(df['c'].iloc[-1], df['o'].iloc[-1]) - df['l'].iloc[-1]
+        if lower_shadow > body * 2:
+            patterns.append("HAMMER")
+        if len(df) > 1:
+            prev_body = abs(df['c'].iloc[-2] - df['o'].iloc[-2])
+            curr_body = abs(df['c'].iloc[-1] - df['o'].iloc[-1])
+            if curr_body > prev_body * 1.5:
+                if df['c'].iloc[-1] > df['o'].iloc[-1] and df['c'].iloc[-2] < df['o'].iloc[-2]:
+                    patterns.append("BULLISH_ENGULFING")
+                elif df['c'].iloc[-1] < df['o'].iloc[-1] and df['c'].iloc[-2] > df['o'].iloc[-2]:
+                    patterns.append("BEARISH_ENGULFING")
+        return patterns
+    
+    def predict(self, current_price, history):
+        if len(history) < 20:
+            return {"agent": self.name, "direction": "NEUTRAL", "confidence": 0}
+        try:
+            df = pd.DataFrame(history)
+            patterns = self.detect_patterns(df)
+            if "BULLISH_ENGULFING" in patterns or "HAMMER" in patterns:
+                direction = "BUY"
+                confidence = 80
+            elif "BEARISH_ENGULFING" in patterns:
+                direction = "SELL"
+                confidence = 80
+            elif "DOJI" in patterns:
+                direction = "HOLD"
+                confidence = 70
+            else:
+                direction = "NEUTRAL"
+                confidence = 50
+            return {
+                "agent": self.name,
+                "direction": direction,
+                "confidence": confidence,
+                "patterns": patterns
+            }
+        except Exception:
+            return {"agent": self.name, "direction": "NEUTRAL", "confidence": 0}
+
+class ScalpingAgent(BaseAgent):
+    def __init__(self, pair, timeframe):
+        super().__init__("ScalpingAgent", pair, timeframe)
+        self.model = lgb.LGBMRegressor(n_estimators=100, num_leaves=31, learning_rate=0.05)
+    
+    def predict(self, current_price, history):
+        if len(history) < 10:
+            return {"agent": self.name, "direction": "NEUTRAL", "confidence": 0}
+        try:
+            recent_prices = [h['c'] for h in history[-10:]]
+            avg_price = np.mean(recent_prices)
+            price_std = np.std(recent_prices)
+            micro_trend = (recent_prices[-1] - recent_prices[-5]) / recent_prices[-5]
+            if micro_trend > 0.0005 and current_price < avg_price:
+                direction = "BUY"
+                confidence = 75
+            elif micro_trend < -0.0005 and current_price > avg_price:
+                direction = "SELL"
+                confidence = 75
+            else:
+                direction = "HOLD"
+                confidence = 55
+            return {
+                "agent": self.name,
+                "direction": direction,
+                "confidence": confidence,
+                "micro_trend": micro_trend
+            }
+        except Exception:
+            return {"agent": self.name, "direction": "NEUTRAL", "confidence": 0}
+
+class NewsAgent(BaseAgent):
+    def __init__(self, pair, timeframe):
+        super().__init__("NewsAgent", pair, timeframe)
+    
+    def predict(self, current_price, history):
+        try:
+            df = pd.DataFrame(history)
+            recent_volatility = df['c'].pct_change().tail(10).std()
+            if recent_volatility > 0.005:
+                direction = "BUY" if df['c'].iloc[-1] > df['c'].iloc[-5] else "SELL"
+                confidence = 70
+            else:
+                direction = "HOLD"
+                confidence = 60
+            return {
+                "agent": self.name,
+                "direction": direction,
+                "confidence": confidence,
+                "volatility_signal": recent_volatility
+            }
+        except Exception:
+            return {"agent": self.name, "direction": "NEUTRAL", "confidence": 0}
